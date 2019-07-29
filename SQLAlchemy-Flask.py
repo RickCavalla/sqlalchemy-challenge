@@ -16,8 +16,7 @@ from sqlalchemy.ext.automap import automap_base
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine, func, inspect
 
-engine = create_engine("sqlite:///Resources/hawaii.sqlite")
-
+engine = create_engine("sqlite:///Resources/hawaii.sqlite", connect_args={'check_same_thread': False})
 
 # reflect an existing database into a new model
 Base = automap_base()
@@ -33,6 +32,22 @@ Station = Base.classes.station
 
 # Create our session (link) from Python to the DB
 session = Session(engine)
+
+# sort date desc and grab first result
+precip_results = session.query(Measurement.date).order_by(Measurement.date.desc()).first()
+last_date = dt.datetime.strptime(precip_results[0], "%Y-%m-%d")
+
+# get start date by subtracting 1 from year.
+# this could have issues during leap years, but I am ignoring that for now.
+start_date = dt.datetime(last_date.year - 1, last_date.month, last_date.day).date()
+
+# get most active station
+# group by stations, count temperature observations per station, sort descending
+station_count = session.query(Measurement.station, func.count(Measurement.tobs)).\
+group_by(Measurement.station).order_by(func.count(Measurement.station).desc()).all()
+
+# most active station is first result from above
+station_most_active = station_count[0][0]
 
 # create a flask app
 app = Flask(__name__)
@@ -70,16 +85,9 @@ def home():
 def precipitation():
     print("Server received request for precipitation...")
 
-    # sort date desc and grab first result
-    precip_results = session.query(Measurement.date).order_by(Measurement.date.desc()).first()
-    last_date = dt.datetime.strptime(precip_results[0], "%Y-%m-%d")
-
-    # get start date by subtracting 1 from year.
-    # this could have issues during leap years, but I am ignoring that for now.
-    start_date = dt.datetime(last_date.year - 1, last_date.month, last_date.day).date()
-
     # Perform a query to retrieve the data and precipitation scores
     precip_results = session.query(Measurement.date, Measurement.prcp).\
+        filter(Measurement.station == station_most_active).\
         filter(Measurement.date >= start_date).all()
 
     # place results in dataframe
@@ -107,22 +115,6 @@ def stations():
 def tobs():
     print("Server received request for tobs...")
 
-    # sort date desc and grab first result
-    precip_results_2 = session.query(Measurement.date).order_by(Measurement.date.desc()).first()
-    last_date = dt.datetime.strptime(precip_results_2[0], "%Y-%m-%d")
-
-    # get start date by subtracting 1 from year.
-    # this could have issues during leap years, but I am ignoring that for now.
-    start_date = dt.datetime(last_date.year - 1, last_date.month, last_date.day).date()
-
-    # get most active station
-    # group by stations, count temperature observations per station, sort descending
-    station_count = session.query(Measurement.station, func.count(Measurement.tobs)).\
-        group_by(Measurement.station).order_by(func.count(Measurement.station).desc()).all()
-
-    # most active station is first result from above
-    station_most_active = station_count[0][0]
-
     # query temperature readings for last year, based on start date calculated earlier in notebook
     tobs_results = session.query(Measurement.date, Measurement.tobs).\
         filter(Measurement.station == station_most_active).\
@@ -143,91 +135,18 @@ def start_temps(start):
     temp_df = pd.DataFrame(temp_results, columns=["TMin", "TAvg", "TMax"])
     temp_dict = temp_df.T.to_dict()
 
-    #temp_dict = {"Tmin": 80, "TAvg": 85, "TMax": 90}
+    return jsonify(temp_dict)
+
+@app.route("/api/v1.0/<start>/<end>")
+def start_end_temps(start, end):
+
+    temp_results = calc_temps(start, end)
+
+    temp_df = pd.DataFrame(temp_results, columns=["TMin", "TAvg", "TMax"])
+    temp_dict = temp_df.T.to_dict()
+
     return jsonify(temp_dict)
 
 # run the flask page
 if __name__ == "__main__":
     app.run(debug=True)
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-# Use your previous function `calc_temps` to calculate the tmin, tavg, and tmax 
-# for your trip using the previous year's data for those same dates.
-
-
-# In[ ]:
-
-
-# Plot the results from your previous query as a bar chart. 
-# Use "Trip Avg Temp" as your Title
-# Use the average temperature for the y value
-# Use the peak-to-peak (tmax-tmin) value as the y error bar (yerr)
-
-
-# In[ ]:
-
-
-# Calculate the total amount of rainfall per weather station for your trip dates using the previous year's matching dates.
-# Sort this in descending order by precipitation amount and list the station, name, latitude, longitude, and elevation
-
-
-# ## Optional Challenge Assignment
-
-# In[ ]:
-
-
-# Create a query that will calculate the daily normals 
-# (i.e. the averages for tmin, tmax, and tavg for all historic data matching a specific month and day)
-
-def daily_normals(date):
-    """Daily Normals.
-    
-    Args:
-        date (str): A date string in the format '%m-%d'
-        
-    Returns:
-        A list of tuples containing the daily normals, tmin, tavg, and tmax
-    
-    """
-    
-    sel = [func.min(Measurement.tobs), func.avg(Measurement.tobs), func.max(Measurement.tobs)]
-    return session.query(*sel).filter(func.strftime("%m-%d", Measurement.date) == date).all()
-    
-daily_normals("01-01")
-
-
-# In[ ]:
-
-
-# calculate the daily normals for your trip
-# push each tuple of calculations into a list called `normals`
-
-# Set the start and end date of the trip
-
-# Use the start and end date to create a range of dates
-
-# Stip off the year and save a list of %m-%d strings
-
-# Loop through the list of %m-%d strings and calculate the normals for each date
-
-
-# In[ ]:
-
-
-# Load the previous query results into a Pandas DataFrame and add the `trip_dates` range as the `date` index
-
-
-# In[ ]:
-
-
-# Plot the daily normals as an area plot with `stacked=False`
-
