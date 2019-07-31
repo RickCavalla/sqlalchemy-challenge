@@ -16,6 +16,11 @@ from sqlalchemy.ext.automap import automap_base
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine, func, inspect
 
+# got lots of errors about using SQLAlchemy in multiple threads.
+# I believe this is to protect database integrity if 
+# multiple users are accessing your web page at same time.
+# The 'check_same_thread' argument got rid of this, but would likely be a bad idea
+# in a "real" application
 engine = create_engine("sqlite:///Resources/hawaii.sqlite", connect_args={'check_same_thread': False})
 
 # reflect an existing database into a new model
@@ -81,6 +86,9 @@ def home():
         "/api/v1.0/&lt;start&gt;/&lt;end&gt;<br>"
     )
 
+# return json of last year of precipitation data.
+# I limired this to most active station to avoid warnings about
+# dates appearing multiple times
 @app.route("/api/v1.0/precipitation")
 def precipitation():
     print("Server received request for precipitation...")
@@ -99,6 +107,7 @@ def precipitation():
 
     return jsonify(precip_dict)
 
+# return json of all measurement stations
 @app.route("/api/v1.0/stations")
 def stations():
     print("Server received request for stations...")
@@ -111,6 +120,9 @@ def stations():
 
     return jsonify(station_dict)
 
+# return json of all temps for last year,
+# again limited to most active station to avoid complaints
+# about dates not being unique
 @app.route("/api/v1.0/tobs")
 def tobs():
     print("Server received request for tobs...")
@@ -118,7 +130,7 @@ def tobs():
     # query temperature readings for last year, based on start date calculated earlier in notebook
     tobs_results = session.query(Measurement.date, Measurement.tobs).\
         filter(Measurement.station == station_most_active).\
-        filter(Measurement.date > start_date).all()
+        filter(Measurement.date >= start_date).all()
 
     # convert to a dataframe
     tobs_df = pd.DataFrame(tobs_results, columns=["Date", "Tobs"]).set_index("Date")
@@ -127,6 +139,9 @@ def tobs():
 
     return jsonify(tobs_dict)
 
+# show aggregate temperature data from a user-defined start date in URL,
+# by calling provided function with an end date of 9999-12-31.  May have to revisit
+# this approach in ~8000 years.
 @app.route("/api/v1.0/<start>")
 def start_temps(start):
 
@@ -137,6 +152,8 @@ def start_temps(start):
 
     return jsonify(temp_dict)
 
+# show aggregate temperature data from a user-defined start date 
+# and end date in URL, by calling provided function
 @app.route("/api/v1.0/<start>/<end>")
 def start_end_temps(start, end):
 
